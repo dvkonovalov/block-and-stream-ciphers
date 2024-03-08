@@ -159,14 +159,19 @@ def encrypt_file(path, key):
         binary_data = file.read()
     pos = 0
     ret_result = b''
-    while pos <= len(binary_data)+7:
+    while pos <= len(binary_data):
         if pos == len(binary_data):
+            # Добавляем последний блок если все блоки были по 64 бита
             binary_data = b'\x00' * 7 + b'8'
-        elif pos > len(binary_data):
-            binary_data = binary_data[pos:] + b'\x00' * (8 - pos + len(binary_data) - 1) + bytes(
-                str(8 - pos + len(binary_data)), 'utf-8')
-            print(binary_data)
-        ret_result += encrypt(binary_data[pos:pos + 8], keys)
+            ret_result += encrypt(binary_data, keys)
+        elif pos > len(binary_data) - 7:
+            # Добавляем в последний блок если на последний не хватило
+            binary_data = binary_data[pos:] + b'\x00' * (8 - len(binary_data) + pos - 1) + (
+                        8 - len(binary_data) + pos).to_bytes(1, 'big')
+            ret_result += encrypt(binary_data, keys)
+        else:
+            # Это был не последний блок
+            ret_result += encrypt(binary_data[pos:pos + 8], keys)
         pos += 8
     with open("encrypt.txt", "wb") as file:
         file.write(ret_result)
@@ -197,18 +202,61 @@ def decrypt_file(path, key):
     pos = 0
     ret_result = b''
     while pos < len(binary_data):
-        ret_result += encrypt(binary_data[pos:pos + 8], keys)
+        ret_result += encrypt(binary_data[pos:pos + 8], decrypt_keys)
         pos += 8
     last_symbol = ret_result[-1]
-    print(ret_result)
-    print(last_symbol)
-    ret_result = ret_result[:-last_symbol-1]
-
+    ret_result = ret_result[:-last_symbol]
     with open("decrypt.txt", "wb") as file:
         file.write(ret_result)
     print("Файл успешно расшифрован и помещен в decrypt.txt")
 
 
+if __name__ == "__main__":
+    choice = input('Сделайте выбор:\n1 - зашифровать файл\n2 - расшифровать файл\nВаш выбор - ')
+    if choice == '1':
+        filename = ''
+        key = ''
+        flag = False
+        while not flag:
+            filename = input('Введите путь к файлу, который требуется защифровать - ')
+            try:
+                file = open(filename, 'r')
+                file.close()
+                flag = True
+            except FileNotFoundError:
+                print(f"Файл {filename} не существует. Введите существующий файл")
+        flag = False
+        while not flag:
+            key = input('Введите ключ (длинной 128 бит) - ')
+            key = bytes(key, 'utf-8')
+            if len(key) == 16:
+                flag = True
+            else:
+                print(f'Вы задали ключ длинной {len(key) * 8} бит, а нужно 128 бит. Повторите ввод')
+        encrypt_file(filename, key)
 
-# encrypt_file('text.txt', b'\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08')
-# decrypt_file('encrypt.txt', b'\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08')
+    elif choice == '2':
+        filename = ''
+        key = ''
+        flag = False
+        while not flag:
+            filename = input('Введите путь к файлу, который требуется защифровать - ')
+            try:
+                file = open(filename, 'r')
+                file.close()
+                flag = True
+            except FileNotFoundError:
+                print(f"Файл {filename} не существует. Введите существующий файл")
+        flag = False
+        while not flag:
+            key = input('Введите ключ (длинной 128 бит) - ')
+            key = bytes(key, 'utf-8')
+            if len(key) == 16:
+                flag = True
+            else:
+                print(f'Вы задали ключ длинной {len(key) * 8} бит, а нужно 128 бит. Повторите ввод')
+        decrypt_file(filename, key)
+
+else:
+    print('Вы ввели некорретное значение, перезапустите программу и введите правильное значение!')
+
