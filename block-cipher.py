@@ -49,6 +49,7 @@ def mul(num1, num2):
         result = 0
     return result.to_bytes(2, byteorder='big')
 
+
 def reverse_element(element):
     """
      Нахождение обратного по умножению элемента по модулю 65537
@@ -56,12 +57,12 @@ def reverse_element(element):
     :return: обратный элемент
     """
     element = int.from_bytes(element, byteorder='big')
-    if element==0:
+    if element == 0:
         element = 65536
     rev_element = 0
-    while (rev_element*element) % 65537 != 1:
+    while (rev_element * element) % 65537 != 1:
         rev_element += 1
-    if rev_element==65536:
+    if rev_element == 65536:
         rev_element = 0
     return rev_element.to_bytes(2, byteorder='big')
 
@@ -69,12 +70,14 @@ def reverse_element(element):
 def opposite_element(element):
     """
     Нахождение противоположного элемента по модулю 65536
-    :param element:
+    :param element: элемент к которому ищем обратный
     :return:
     """
     element = int.from_bytes(element, byteorder='big')
-    element = (-1 * element) % 65536
-    return element.to_bytes(2, byteorder='big')
+    op_element = 0
+    while (element + op_element) % 65536 != 0:
+        op_element += 1
+    return op_element.to_bytes(2, byteorder='big')
 
 
 def cyclic_shift_left(binary_string):
@@ -89,7 +92,6 @@ def cyclic_shift_left(binary_string):
     return binary_string
 
 
-
 def generation_keys(primary_key):
     """
     Функция генерации ключей для алгоритма IDEA
@@ -102,7 +104,7 @@ def generation_keys(primary_key):
         if i == 6:
             k = 4
         for j in range(k):
-            keys.append(primary_key[j*2:j*2 + 2])
+            keys.append(primary_key[j * 2:j * 2 + 2])
         primary_key = cyclic_shift_left(primary_key)
     return keys
 
@@ -122,37 +124,74 @@ def encrypt(block, keys):
     steps = [b''] * 10
 
     for i in range(8):
-        steps[0] = mul(x1, keys[i*6])
-        steps[1] = add(x2, keys[i*6 + 1])
-        steps[2] = add(x3, keys[i*6 + 2])
-        steps[3] = mul(x4, keys[i*6 + 3])
+        steps[0] = mul(x1, keys[i * 6])
+        steps[1] = add(x2, keys[i * 6 + 1])
+        steps[2] = add(x3, keys[i * 6 + 2])
+        steps[3] = mul(x4, keys[i * 6 + 3])
         steps[4] = xor(steps[0], steps[2])
         steps[5] = xor(steps[1], steps[3])
-        steps[6] = mul(steps[4], keys[i*6 + 4])
+        steps[6] = mul(steps[4], keys[i * 6 + 4])
         steps[7] = add(steps[5], steps[6])
-        steps[8] = mul(steps[7], keys[i*6 + 5])
+        steps[8] = mul(steps[7], keys[i * 6 + 5])
         steps[9] = add(steps[6], steps[8])
 
         x1 = xor(steps[0], steps[8])
         x2 = xor(steps[2], steps[8])
         x3 = xor(steps[1], steps[9])
         x4 = xor(steps[3], steps[9])
-    print(
-        f"последний раунд - x1 = {hex(x1[0]), hex(x1[1])}, x2 = {hex(x2[0]), hex(x2[1])}, x3 = {hex(x3[0]), hex(x3[1])}, x4 = {hex(x4[0]), hex(x4[1])}\n\n\n")
     x2, x3 = x3, x2
     x1 = mul(x1, keys[48])
     x2 = add(x2, keys[49])
     x3 = add(x3, keys[50])
     x4 = mul(x4, keys[51])
 
-    print(
-        f"финиш - x1 = {hex(x1[0]), hex(x1[1])}, x2 = {hex(x2[0]), hex(x2[1])}, x3 = {hex(x3[0]), hex(x3[1])}, x4 = {hex(x4[0]), hex(x4[1])}\n\n\n")
-
     return x1 + x2 + x3 + x4
 
 
-def encrypt_file(path):
+def encrypt_file(path, key):
+    """
+    Функция для шифрования файла
+    :param path: путь к файлу
+    :param key: первичный ключ
+    """
     keys = generation_keys(key)
+    with open(path, "rb") as file:
+        binary_data = file.read()
+    pos = 0
+    ret_result = b''
+    while pos <= len(binary_data)+7:
+        if pos == len(binary_data):
+            binary_data = b'\x00' * 7 + b'8'
+        elif pos > len(binary_data):
+            binary_data = binary_data[pos:] + b'\x00' * (8 - pos + len(binary_data) - 1) + bytes(
+                str(8 - pos + len(binary_data)), 'utf-8')
+            print(binary_data)
+        ret_result += encrypt(binary_data[pos:pos + 8], keys)
+        pos += 8
+    with open("encrypt.txt", "wb") as file:
+        file.write(ret_result)
+    print("Файл успешно зашифрован и помещен в encrypt.txt")
+
+
+def decrypt_file(path, key):
+    """
+    Функция для расшифрования файла
+    :param path: путь к зашифрованному файлу
+    :param key: первичный ключ
+    """
+    keys = generation_keys(key)
+    decrypt_keys = [reverse_element(keys[48]), opposite_element(keys[49]), opposite_element(keys[50]),
+                    reverse_element(keys[51])]
+
+    for i in range(8):
+        decrypt_keys.append(keys[47 - i * 6 - 1])
+        decrypt_keys.append(keys[47 - i * 6])
+        decrypt_keys.append(reverse_element(keys[47 - i * 6 - 5]))
+        decrypt_keys.append(opposite_element(keys[47 - i * 6 - 3]))
+        decrypt_keys.append(opposite_element(keys[47 - i * 6 - 4]))
+        decrypt_keys.append(reverse_element(keys[47 - i * 6 - 2]))
+    decrypt_keys[49], decrypt_keys[50] = decrypt_keys[50], decrypt_keys[49]
+
     with open(path, "rb") as file:
         binary_data = file.read()
     pos = 0
@@ -160,54 +199,16 @@ def encrypt_file(path):
     while pos < len(binary_data):
         ret_result += encrypt(binary_data[pos:pos + 8], keys)
         pos += 8
-    with open("encrypt.txt", "wb") as file:
+    last_symbol = ret_result[-1]
+    print(ret_result)
+    print(last_symbol)
+    ret_result = ret_result[:-last_symbol-1]
+
+    with open("decrypt.txt", "wb") as file:
         file.write(ret_result)
-
-
-def decrypt_file(path):
-    keys = generation_keys(key)
-    decrypt_keys = []
-    for i in range(17):
-        decrypt_keys.append(reverse_element(keys[51-i]))
-        if i%2==0:
-            decrypt_keys.append(opposite_element(keys[51-1-i]))
-            decrypt_keys.append(opposite_element(keys[51-2-i]))
-        else:
-            decrypt_keys.append(keys[51 - 1 - i])
-            decrypt_keys.append(keys[51 - 2 - i])
-    decrypt_keys.append(reverse_element(keys[51]))
-
-
-    print(encrypt(b'\x02W\xc9*\xd0\xab\xc5\xca', decrypt_keys))
-    return 0
-
-    with open(path, "rb") as file:
-        binary_data = file.read()
-    pos = 0
-    ret_result = b''
-    while pos < len(binary_data):
-        ret_result += encrypt(binary_data[pos:pos + 8], decrypt_keys)
-        pos += 8
-    with open("encrypt.txt", "wb") as file:
-        file.write(ret_result)
+    print("Файл успешно расшифрован и помещен в decrypt.txt")
 
 
 
-keys = generation_keys(b"\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08")
-decrypt_keys = []
-for i in range(17):
-    decrypt_keys.append(reverse_element(keys[51 - i]))
-    if i % 2 == 0:
-        decrypt_keys.append(opposite_element(keys[51 - 1 - i]))
-        decrypt_keys.append(opposite_element(keys[51 - 2 - i]))
-    else:
-        decrypt_keys.append(keys[51 - 1 - i])
-        decrypt_keys.append(keys[51 - 2 - i])
-decrypt_keys.append(reverse_element(keys[51]))
-
-result = encrypt(b"\x00\x00\x00\x01\x00\x02\x00\x03", keys)
-
-print(result)
-
-
-#print(encrypt(result, decrypt_keys))
+# encrypt_file('text.txt', b'\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08')
+# decrypt_file('encrypt.txt', b'\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08')
