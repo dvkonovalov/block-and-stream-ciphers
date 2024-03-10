@@ -164,7 +164,7 @@ def encrypt_file(path, key):
             # Добавляем последний блок если все блоки были по 64 бита
             binary_data = b'\x00' * 7 + b'8'
             ret_result += encrypt(binary_data, keys)
-        elif pos > len(binary_data) - 7:
+        elif pos > len(binary_data) - 8:
             # Добавляем в последний блок если на последний не хватило
             binary_data = binary_data[pos:] + b'\x00' * (8 - len(binary_data) + pos - 1) + (
                         8 - len(binary_data) + pos).to_bytes(1, 'big')
